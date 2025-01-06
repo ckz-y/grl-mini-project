@@ -22,10 +22,15 @@ class GCNLayer(nn.Module):
 
         super(GCNLayer, self).__init__()
 
-        self.weight = nn.Parameter(torch.rand((in_channels, out_channels)) / 4 - 0.125)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.weight = nn.Parameter(
+            torch.rand((in_channels, out_channels)) / 4 - 0.125
+        ).to(device)
         self.aug_adj_type = aug_adj_type
 
     def forward(self, x: torch.Tensor, adj_matrix: torch.Tensor):
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
         degree_matrix = torch.diag(torch.sum(adj_matrix, axis=1))
         num_nodes = len(adj_matrix)
@@ -38,7 +43,7 @@ class GCNLayer(nn.Module):
 
             aug_adj_matrix = (
                 deg_mat_self_loop_inv_sq
-                @ (adj_matrix + torch.eye(num_nodes))
+                @ (adj_matrix + torch.eye(num_nodes).to(device))
                 @ deg_mat_self_loop_inv_sq
             )
         elif self.aug_adj_type == "adjacency":
@@ -57,6 +62,7 @@ class GCNLayer(nn.Module):
 
         return x
 
+
 class GCN(nn.Module):
     """_summary_
 
@@ -74,6 +80,8 @@ class GCN(nn.Module):
         dropout: float = 0.3,
     ):
         super(GCN, self).__init__()
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.conv_layers = nn.ModuleList()
         self.num_layers = num_layers
@@ -97,7 +105,7 @@ class GCN(nn.Module):
         else:  # num_layers == 0, single feed-forward network
             self.weight = nn.Parameter(
                 torch.rand((in_channels, hidden_channels)) / 4 - 0.125
-            )
+            ).to(device)
 
         self.output_layer = nn.Linear(hidden_channels, out_channels)
 
