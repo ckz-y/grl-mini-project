@@ -18,48 +18,21 @@ class GCNLayer(nn.Module):
     $$(D + I)^{-1/2} (A + I) (D + I)^{-1/2}$$
     """
 
-    def __init__(self, in_channels: int, out_channels: int, aug_adj_type: str):
+    def __init__(self, in_channels: int, out_channels: int):
 
         super(GCNLayer, self).__init__()
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        # self.weight = nn.Parameter(
+        #     torch.rand((in_channels, out_channels)) / 4 - 0.125
+        # ).to(device)
         self.weight = nn.Parameter(
             torch.rand((in_channels, out_channels)) / 4 - 0.125
-        ).to(device)
-        self.aug_adj_type = aug_adj_type
+        )
 
-    def forward(self, x: torch.Tensor, adj_matrix: torch.Tensor):
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        degree_matrix = torch.diag(torch.sum(adj_matrix, axis=1))
-        num_nodes = len(adj_matrix)
-
-        if self.aug_adj_type == "symmetric":
-            deg_diag = torch.sum(adj_matrix, axis=1)
-            deg_diag_self_loop = deg_diag + 1
-            deg_diag_self_loop_inv_sq = torch.pow(deg_diag_self_loop, -0.5)
-            deg_mat_self_loop_inv_sq = torch.diag(deg_diag_self_loop_inv_sq)
-
-            aug_adj_matrix = (
-                deg_mat_self_loop_inv_sq
-                @ (adj_matrix + torch.eye(num_nodes).to(device))
-                @ deg_mat_self_loop_inv_sq
-            )
-        elif self.aug_adj_type == "adjacency":
-            aug_adj_matrix = adj_matrix
-        elif self.aug_adj_type == "degree":
-            aug_adj_matrix = degree_matrix
-        elif self.aug_adj_type == "random walk":
-            deg_diag = torch.sum(adj_matrix, axis=1)
-            deg_diag_inv = torch.pow(deg_diag, -1)
-            deg_mat_inv = torch.diag(deg_diag_inv)
-            aug_adj_matrix = deg_mat_inv @ adj_matrix
-        else:
-            raise ValueError("Received invalid augmented adjacency matrix type.")
+    def forward(self, x: torch.Tensor, aug_adj_matrix: torch.Tensor):
 
         x = F.relu(aug_adj_matrix @ x @ self.weight)
-
         return x
 
 
@@ -76,7 +49,6 @@ class GCN(nn.Module):
         hidden_channels: int,
         out_channels: int,
         num_layers: int,
-        aug_adj_type: str,
         dropout: float = 0.3,
     ):
         super(GCN, self).__init__()
@@ -88,39 +60,35 @@ class GCN(nn.Module):
         self.dropout = dropout
 
         if num_layers >= 2:
-            self.conv_layers.append(
-                GCNLayer(in_channels, hidden_channels, aug_adj_type)
-            )
+            self.conv_layers.append(GCNLayer(in_channels, hidden_channels))
 
             for i in range(num_layers - 2):
-                self.conv_layers.append(
-                    GCNLayer(hidden_channels, hidden_channels, aug_adj_type)
-                )
+                self.conv_layers.append(GCNLayer(hidden_channels, hidden_channels))
 
-            self.final_conv_layer = GCNLayer(
-                hidden_channels, hidden_channels, aug_adj_type
-            )
+            self.final_conv_layer = GCNLayer(hidden_channels, hidden_channels)
         elif num_layers == 1:
-            self.final_conv_layer = GCNLayer(in_channels, hidden_channels, aug_adj_type)
+            self.final_conv_layer = GCNLayer(in_channels, hidden_channels)
         else:  # num_layers == 0, single feed-forward network
+            # self.weight = nn.Parameter(
+            #     torch.rand((in_channels, hidden_channels)) / 4 - 0.125
+            # ).to(device)
             self.weight = nn.Parameter(
                 torch.rand((in_channels, hidden_channels)) / 4 - 0.125
-            ).to(device)
+            )
 
         self.output_layer = nn.Linear(hidden_channels, out_channels)
 
-    def forward(self, x: torch.Tensor, adj_matrix: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, aug_adj_matrix: torch.Tensor) -> torch.Tensor:
         if self.num_layers >= 1:
             for layer in self.conv_layers:
-                x = layer(x, adj_matrix)
+                x = layer(x, aug_adj_matrix)
                 x = F.dropout(x, p=self.dropout)
 
-            x = self.final_conv_layer(x, adj_matrix)
+            x = self.final_conv_layer(x, aug_adj_matrix)
 
         else:  # num_layers == 0, single feed-forward network
             x = F.relu(x @ self.weight)
 
         x = self.output_layer(x)
         x = F.softmax(x, dim=1)
-
         return x
