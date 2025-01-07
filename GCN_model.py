@@ -4,19 +4,6 @@ import torch.nn.functional as F
 
 
 class GCNLayer(nn.Module):
-    """Implements a single graph convolutional layer.
-
-    Args:
-        in_channels (int): Size of each input sample.
-        out_channels (int): _Size of each output sample.
-        aug_adj_type (str): Type of augmented adjacency matrix to use.
-            1. Symmetric Normalized Adjacency Matrix with Self-Loop: $(D + I)^{-1/2} (A + I) (D + I)^{-1/2}$
-            2. Adjacency Matrix: $A$
-            3. Degree Matrix: $D$
-            4. Random Walk Adjacency Matrix: $D^{-1} A$
-
-    $$(D + I)^{-1/2} (A + I) (D + I)^{-1/2}$$
-    """
 
     def __init__(self, in_channels: int, out_channels: int):
 
@@ -37,11 +24,6 @@ class GCNLayer(nn.Module):
 
 
 class GCN(nn.Module):
-    """_summary_
-
-    Args:
-        nn (_type_): _description_
-    """
 
     def __init__(
         self,
